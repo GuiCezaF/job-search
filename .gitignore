@@ -220,3 +220,5 @@ __marimo__/
 logs/
 
 config.yaml
+
+.cursor/

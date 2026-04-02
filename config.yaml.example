@@ -4,6 +4,10 @@ search:
   # Horário de execução (formato cron: minuto hora dia mes dia_da_semana)
   # Exemplo: "0 9 * * *" roda todo dia às 09:00
   schedule: "0 9 * * *"
+
+  # max_jobs_per_query: número máximo de vagas válidas a coletar por combinação de palavra-chave + localidade. 
+  # Diminua se quiser limitar os resultados ou agilizar buscas (principalmente com muitas keywords).
+   max_jobs_per_query: 35
   
   # Palavras-chave de busca
   keywords:
