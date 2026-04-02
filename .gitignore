@@ -224,3 +224,4 @@ logs/
 config.yaml
 
 .cursor/
+output/

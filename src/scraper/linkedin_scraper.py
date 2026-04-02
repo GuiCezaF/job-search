@@ -117,7 +117,10 @@ class LinkedInScraper:
         """Return True if the card is promoted/sponsored or marked as already viewed."""
         return await card.evaluate(
             """(el) => {
-              const root = el.closest('[data-occludable-job-id]') || el;
+              const root =
+                el.closest('li.scaffold-layout__list-item') ||
+                el.closest('[data-occludable-job-id]') ||
+                el;
               const text = (root.innerText || '').toLowerCase();
               const html = (root.innerHTML || '').toLowerCase();
 
@@ -127,8 +130,9 @@ class LinkedInScraper:
                 root.querySelector('[class*="promoted"]') !== null;
 
               const viewed =
-                /\\bviewed\\b|\\bvisualizad[oa]\\b/.test(text) ||
-                root.querySelector('[class*="viewed"]') !== null;
+                /\\bviewed\\b|\\bvisualizad[oa]\\b|\\bvisualizado\\b/.test(text) ||
+                root.querySelector('[class*="viewed"]') !== null ||
+                root.querySelector('.job-card-container__footer-job-state') !== null;
 
               return promoted || viewed;
             }"""
@@ -137,6 +141,9 @@ class LinkedInScraper:
     @staticmethod
     async def _job_id_from_card(card: ElementHandle) -> str:
         """Stable id for deduplication while scrolling a virtualized list."""
+        job_attr = await card.get_attribute("data-job-id")
+        if job_attr and job_attr.strip():
+            return job_attr.strip()
         attr = await card.get_attribute("data-occludable-job-id")
         if attr and attr.strip():
             return attr.strip()
@@ -159,7 +166,10 @@ class LinkedInScraper:
         return await page.evaluate(
             """() => {
               const selectors = [
+                '.scaffold-layout__list-detail-inner',
+                'main.scaffold-layout__list-detail',
                 '.scaffold-layout__list-container',
+                'div.scaffold-layout__list',
                 '.jobs-search-results-list',
                 '.scaffold-layout__list',
                 '[class*="jobs-search-results-list"]',
@@ -182,7 +192,12 @@ class LinkedInScraper:
 
     async def _scroll_last_job_into_view(self, page: Page) -> None:
         """Scroll the last job card into view to trigger lazy loading."""
-        handles = await page.query_selector_all("[data-occludable-job-id]")
+        handles = await page.query_selector_all(
+            "div.job-card-container[data-job-id], "
+            "li.scaffold-layout__list-item .job-card-container.job-card-list"
+        )
+        if not handles:
+            handles = await page.query_selector_all("[data-occludable-job-id]")
         if not handles:
             return
         try:
@@ -229,22 +244,37 @@ class LinkedInScraper:
         await page.goto(url)
         await asyncio.sleep(random.uniform(3, 5))
 
-        selectors = [
+        list_ready_selectors = [
+            "header.jobs-search-results-list__header",
+            "#results-list__title",
+            "li.scaffold-layout__list-item .job-card-container",
+            "div.job-card-container.job-card-list[data-job-id]",
+            "div.job-card-container[data-job-id]",
             ".scaffold-layout__list-container",
             "ul.jobs-search-results__list",
             ".jobs-search-results-list",
             "[data-view-name='job-card']",
             ".jobs-search-results-list__container",
         ]
+        wait_selector = ", ".join(list_ready_selectors)
         try:
-            await page.wait_for_selector(", ".join(selectors), timeout=20000)
+            await page.wait_for_selector(wait_selector, timeout=25000, state="visible")
         except PlaywrightTimeoutError:
+            has_populated_card = await page.query_selector(
+                "div.job-card-container[data-job-id], "
+                "li.scaffold-layout__list-item .job-card-container"
+            )
             no_jobs_msg = await page.query_selector(
                 ".jobs-search-two-pane__no-results-banner, .jobs-search-no-results-banner, .jobs-search-no-results"
             )
             if no_jobs_msg:
                 logger.warning(
                     "No jobs for this query",
+                    extra={"extra_fields": {"keyword": keyword, "location": location}},
+                )
+            elif has_populated_card:
+                logger.warning(
+                    "Job list selector wait timed out but job cards are present; continuing",
                     extra={"extra_fields": {"keyword": keyword, "location": location}},
                 )
             else:
@@ -262,7 +292,10 @@ class LinkedInScraper:
         collected = 0
         stagnant_rounds = 0
 
-        card_selector = "[data-occludable-job-id]"
+        card_selector = (
+            "div.job-card-container[data-job-id], "
+            "li.scaffold-layout__list-item .job-card-container.job-card-list"
+        )
 
         for round_idx in range(self.MAX_SCROLL_ROUNDS):
             if collected >= self.max_jobs_per_query:
@@ -286,13 +319,17 @@ class LinkedInScraper:
 
                 try:
                     title_elem = await card.query_selector(
-                        ".job-card-list__title, .job-card-container__link, h3, [data-view-name='job-card-title']"
+                        "a.job-card-list__title--link, .job-card-list__title, "
+                        ".job-card-container__link, h3, [data-view-name='job-card-title']"
                     )
                     company_elem = await card.query_selector(
-                        ".job-card-container__primary-description, .job-card-container__company-name, .base-search-card__subtitle, .job-card-container__secondary-subtitle"
+                        ".artdeco-entity-lockup__subtitle span, "
+                        ".job-card-container__primary-description, .job-card-container__company-name, "
+                        ".base-search-card__subtitle, .job-card-container__secondary-subtitle"
                     )
                     link_elem = await card.query_selector(
-                        "a.job-card-list__title, a.job-card-container__link, a[href*='/jobs/view/']"
+                        "a.job-card-list__title--link, a.job-card-list__title, "
+                        "a.job-card-container__link, a[href*='/jobs/view/']"
                     )
                     location_elem = await card.query_selector(
                         ".job-card-container__metadata-item, .job-card-container__location, .job-card-container__metadata-wrapper"
