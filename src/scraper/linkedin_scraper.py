@@ -2,7 +2,6 @@ import asyncio
 import os
 import random
 import re
-from datetime import datetime
 from typing import Any, Dict, List, Set
 
 from playwright.async_api import (
@@ -347,7 +346,6 @@ class LinkedInScraper:
                             "Empresa": company,
                             "Local": loc,
                             "Link": link,
-                            "Data de Busca": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "Keyword": keyword,
                             "Filtro Experiência": ", ".join(experiences),
                         }

@@ -21,4 +21,5 @@ discord:
   webhook_url: "optional-if-using-env"
 
 google_drive:
-  folder_id: "..."
+  enabled: false
+  folder_id: ""

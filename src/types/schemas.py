@@ -1,6 +1,6 @@
 from typing import List
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 
 class LinkedInConfig(BaseModel):
@@ -42,12 +42,26 @@ class SearchConfig(BaseModel):
     max_jobs_per_query: int = Field(default=32, ge=1, le=200)
 
 
+class GoogleDriveConfig(BaseModel):
+    """Optional upload of the daily CSV to a Drive folder (service account)."""
+
+    enabled: bool = False
+    folder_id: str = ""
+
+    @model_validator(mode="after")
+    def folder_id_required_when_enabled(self) -> "GoogleDriveConfig":
+        if self.enabled and (not self.folder_id or not self.folder_id.strip()):
+            raise ValueError("google_drive.folder_id is required when google_drive.enabled is true")
+        return self
+
+
 class AppConfig(BaseModel):
     """Root configuration model validated from YAML plus environment."""
 
     linkedin: LinkedInConfig
     discord: DiscordConfig
     search: SearchConfig
+    google_drive: GoogleDriveConfig = Field(default_factory=GoogleDriveConfig)
 
 
 class JobResult(BaseModel):
@@ -59,6 +73,5 @@ class JobResult(BaseModel):
     company: str = Field(alias="Empresa")
     location: str = Field(alias="Local")
     link: str = Field(alias="Link")
-    search_date: str = Field(alias="Data de Busca")
     keyword: str = Field(alias="Keyword")
     experience_filter: str = Field(alias="Filtro Experiência")

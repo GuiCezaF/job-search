@@ -7,6 +7,7 @@ from src.notifier.discord_client import DiscordNotifier
 from src.scheduler import JobScheduler
 from src.scraper.linkedin_scraper import LinkedInScraper
 from src.storage.file_manager import FileManager
+from src.storage.google_drive_uploader import GoogleDriveUploader
 from src.types.exceptions import AppError, ConfigError, LoginError, ReportingError
 from src.utils.config_loader import ConfigLoader
 from src.utils.logger import AppLogger
@@ -25,7 +26,7 @@ def _exit_with_error(message: str, *, exc_info: bool = False) -> NoReturn:
 
 
 async def run_job_search() -> None:
-    """Run one full cycle: scrape, save CSV, notify Discord. Swallows expected errors after logging."""
+    """Run one full cycle: scrape, save CSV, optional Drive upload, notify Discord. Swallows expected errors after logging."""
     logger.info("Starting job search cycle...")
     try:
         loader = ConfigLoader()
@@ -44,6 +45,24 @@ async def run_job_search() -> None:
 
         file_manager = FileManager()
         file_path = file_manager.save_to_csv(results)
+
+        gd = app_cfg.google_drive
+        if file_path and gd.folder_id.strip() and not gd.enabled:
+            logger.info(
+                "Google Drive upload skipped: google_drive.enabled is false "
+                "(folder_id is set; set enabled: true to upload the CSV).",
+                extra={"extra_fields": {"function": "run_job_search"}},
+            )
+
+        if app_cfg.google_drive.enabled and file_path:
+            try:
+                uploader = GoogleDriveUploader(app_cfg.google_drive.folder_id)
+                await asyncio.to_thread(uploader.upload_file, file_path)
+            except ReportingError as err:
+                logger.error(
+                    "Google Drive upload failed; continuing with Discord notification",
+                    extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
+                )
 
         notifier = DiscordNotifier(app_cfg.discord.webhook_url.get_secret_value())
         await notifier.send_notification(results, file_path)

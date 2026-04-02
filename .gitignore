@@ -225,3 +225,6 @@ config.yaml
 
 .cursor/
 output/
+job-search-*.json
+google_drive_token.json
+*_secret_*.*
