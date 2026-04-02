@@ -1,0 +1,14 @@
+services:
+  job-search:
+    build: .
+    container_name: job-search-app
+    restart: unless-stopped
+    # Carrega as variáveis de ambiente do arquivo .env
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml
+    # Você pode passar argumentos extras aqui se desejar
+    # command: ["--now"] # Descomente para rodar imediatamente ao subir

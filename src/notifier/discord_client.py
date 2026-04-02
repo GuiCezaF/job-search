@@ -19,9 +19,10 @@ class DiscordNotifier:
         summary += "--- 📋 Resumo (Top 5) ---\n"
         for job in data[:5]:
             summary += f"🔹 **{job['Título']}** @ {job['Empresa']} ({job['Local']})\n"
+            summary += f"🔗 [Ver Vaga]({job['Link']})\n\n"
         
         if len(data) > 5:
-            summary += f"\n...e mais {len(data) - 5} vagas encontradas."
+            summary += f"💡 ...e mais {len(data) - 5} vagas encontradas."
             
         summary += f"\n\n📂 Arquivo do dia: `{file_path}`" if file_path else ""
         
