@@ -172,7 +172,7 @@ One-shot run:
 docker compose run --rm job-search --now
 ```
 
-The `Dockerfile` base image (`mcr.microsoft.com/playwright/python`) should **match the Playwright version** in `requirements.txt` (e.g. tag `v1.xx.x-jammy` or equivalent) so the runtime matches the installed browsers.
+The `Dockerfile` is **multi-stage**: stage 1 uses `mcr.microsoft.com/playwright/python` **v1.50.x on Ubuntu 24.04 (noble)** with **Python 3.12**, a **`venv --copies`**, and **Chromium only** under `/opt/pw-browsers`. Stage 2 uses **`ubuntu:24.04`**, copies the venv and browsers, installs **`tzdata`**, **`TZ=UTC`** (override in Compose if you want local cron times), `python3.12-minimal` + `libpython3.12-stdlib`, and `python -m playwright install-deps chromium`. This avoids shipping Firefox/WebKit from the Playwright base and clears `tzlocal` / `google-api-core` Python-version noise from the old 3.10 image.
 
 ## Tests
 
