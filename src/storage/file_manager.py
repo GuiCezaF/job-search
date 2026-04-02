@@ -19,7 +19,7 @@ class FileManager:
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
-    def save_to_csv(self, data: List[Mapping[str, Any]], prefix: str = "vagas") -> str:
+    def save_to_csv(self, data: List[Mapping[str, Any]], prefix: str = "jobs") -> str:
         """Write ``data`` to ``{prefix}-{date}.csv``; returns path or empty string if no rows."""
         if not data:
             logger.warning("No data to save.")

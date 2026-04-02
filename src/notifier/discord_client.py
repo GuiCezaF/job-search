@@ -23,7 +23,7 @@ class DiscordNotifier:
         data: List[Mapping[str, Any]],
         file_path: Optional[str] = None,
     ) -> None:
-        """Send a formatted message; ``data`` rows use Portuguese CSV column keys."""
+        """Send a formatted message; ``data`` rows use the same keys as the CSV columns."""
         if not data:
             await self._send_raw_message(
                 "Job search finished: no jobs found today."
@@ -35,7 +35,7 @@ class DiscordNotifier:
         )
         summary += "--- Top 5 ---\n"
         for job in data[:5]:
-            summary += f"**{job['Título']}** @ {job['Empresa']} ({job['Local']})\n"
+            summary += f"**{job['Title']}** @ {job['Company']} ({job['Location']})\n"
             summary += f"[Open job]({job['Link']})\n\n"
 
         if len(data) > 5:

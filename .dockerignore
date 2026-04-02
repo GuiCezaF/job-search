@@ -1,0 +1,37 @@
+# Git and local tooling
+.git
+.gitignore
+.cursor
+.agent
+
+# Python dependencies and caches
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+*.egg-info
+
+# Host-generated dirs (mounted as volumes)
+output
+logs
+
+# Secrets — never bake into the image
+.env
+.env.*
+!.env.dev.example
+!.env.production.example
+google_drive_token.json
+client_secret*.json
+job-search-*.json
+*492114*.json
+secrets
+
+# Local config (use a bind mount in production; avoid copying personal config by mistake)
+config.yaml
+
+# Docs and IDE
+*.md
+.vscode
+.idea

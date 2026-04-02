@@ -43,7 +43,7 @@ class SearchConfig(BaseModel):
 
 
 class GoogleDriveConfig(BaseModel):
-    """Optional upload of the daily CSV to a Drive folder (service account)."""
+    """Optional upload of the daily CSV to Google Drive (OAuth user or service account)."""
 
     enabled: bool = False
     folder_id: str = ""
@@ -65,13 +65,13 @@ class AppConfig(BaseModel):
 
 
 class JobResult(BaseModel):
-    """One scraped job row (aliases match Portuguese CSV headers)."""
+    """One scraped job row (field aliases match CSV column headers)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
-    title: str = Field(alias="Título")
-    company: str = Field(alias="Empresa")
-    location: str = Field(alias="Local")
+    title: str = Field(alias="Title")
+    company: str = Field(alias="Company")
+    location: str = Field(alias="Location")
     link: str = Field(alias="Link")
     keyword: str = Field(alias="Keyword")
-    experience_filter: str = Field(alias="Filtro Experiência")
+    experience_filter: str = Field(alias="Experience filter")

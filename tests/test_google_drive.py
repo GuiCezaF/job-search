@@ -1,4 +1,4 @@
-"""Testes de configuração Google Drive e upload com mocks."""
+"""Google Drive config validation and mocked upload tests."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -45,11 +45,11 @@ def test_app_config_parses_google_drive_block() -> None:
 def test_uploader_upload_file_deletes_same_name_then_creates(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Substitui arquivo com mesmo nome: lista, apaga ids, cria novo."""
+    """Same basename: list, delete ids, then create."""
     monkeypatch.delenv("GOOGLE_DRIVE_OAUTH_TOKEN_FILE", raising=False)
     sa_path = tmp_path / "sa.json"
     sa_path.write_text("{}", encoding="utf-8")
-    csv_path = tmp_path / "vagas-2026-04-02.csv"
+    csv_path = tmp_path / "jobs-2026-04-02.csv"
     csv_path.write_text("a,b\n", encoding="utf-8")
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(sa_path))
 
@@ -99,7 +99,7 @@ def test_uploader_raises_when_credentials_path_missing(monkeypatch: pytest.Monke
 def test_uploader_prefers_oauth_token_over_service_account(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Com GOOGLE_DRIVE_OAUTH_TOKEN_FILE definido, não usa service account."""
+    """When GOOGLE_DRIVE_OAUTH_TOKEN_FILE is set, service account is not used."""
     token_path = tmp_path / "token.json"
     token_path.write_text("{}", encoding="utf-8")
     sa_path = tmp_path / "sa.json"

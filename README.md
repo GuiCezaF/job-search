@@ -68,8 +68,8 @@ export DOTENV_FILE=/absolute/path/to/custom.env
 | `HEADLESS` | Optional. `true` or `false` (templates use `false` locally and `true` in production). |
 | `RUNNING_IN_DOCKER` | Set by Compose; do not set manually on your laptop unless you mean to simulate Docker |
 | `DOTENV_FILE` | Optional. Forces a specific env file path |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Optional. JSON da **service account** (só faz sentido com [Shared Drive](https://developers.google.com/workspace/drive/api/guides/about-shareddrives) no Google Workspace). |
-| `GOOGLE_DRIVE_OAUTH_TOKEN_FILE` | Optional. Caminho do token OAuth de **usuário** (conta Gmail pessoal). Gere com `scripts/setup_google_drive_oauth.py`. Tem prioridade sobre `GOOGLE_APPLICATION_CREDENTIALS`. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Optional. **Service account** JSON (Shared Drive / Workspace). Path relative to repo root (e.g. `secrets/...`) or absolute; in Docker use `/app/secrets/...`. |
+| `GOOGLE_DRIVE_OAUTH_TOKEN_FILE` | Optional. User OAuth token (Gmail). E.g. `secrets/google_drive_token.json` on the host; `/app/secrets/google_drive_token.json` in the container. Takes precedence over `GOOGLE_APPLICATION_CREDENTIALS`. |
 
 Environment secrets **override** matching keys in YAML when both are set.
 
@@ -105,32 +105,32 @@ Allowed `experience_levels` values (internal mapping): `Internship`, `Entry leve
 
 When `google_drive.enabled` is true, after saving the CSV locally the app uploads it to the folder whose **ID** is in `google_drive.folder_id` (from the Drive URL: `.../folders/FOLDER_ID`).
 
-**Conta Google pessoal (Gmail):** use **OAuth de usuário**, não service account. O Google retorna **403** com mensagem do tipo *“Service Accounts do not have storage quota”* se você só compartilhar uma pasta do “Meu Drive” com a service account — [contas de serviço não têm cota própria](https://developers.google.com/drive/api/guides/about-auth) nesse cenário.
+**Personal Google (Gmail):** use **user OAuth**, not a service account. Google returns **403** with *“Service Accounts do not have storage quota”* if you only share a “My Drive” folder with the service account — [service accounts do not get personal Drive quota](https://developers.google.com/drive/api/guides/about-auth) in that setup.
 
-**Opção A — OAuth (recomendado para Gmail)**
+**Option A — OAuth (recommended for Gmail)**
 
-1. [Google Cloud Console](https://console.cloud.google.com/): ative **Google Drive API**; em **APIs e serviços → Credenciais**, crie **ID do cliente OAuth** tipo **Aplicativo para computador** e baixe o JSON.
-2. Tela de consentimento OAuth: modo **Teste** e adicione seu usuário como testador (ou publique o app se for o caso).
-3. Gere o token (uma vez, abre o navegador):
+1. In [Google Cloud Console](https://console.cloud.google.com/), enable **Google Drive API**; under **APIs & Services → Credentials**, create an **OAuth client ID** of type **Desktop app** and download the JSON.
+2. OAuth consent screen: **Testing** mode and add your Google account as a **test user** (or publish the app if applicable).
+3. Put the Desktop client JSON under `secrets/` and generate the token once (opens the browser):
 
    ```bash
    uv run python scripts/setup_google_drive_oauth.py \
-     --client-secrets /caminho/client_secret_....json \
-     --output ./google_drive_token.json
+     --client-secrets secrets/client_secret_XXX.apps.googleusercontent.com.json \
+     --output secrets/google_drive_token.json
    ```
 
-4. No `.env`: `GOOGLE_DRIVE_OAUTH_TOKEN_FILE=/caminho/absoluto/google_drive_token.json`
-5. `config.yaml`: `google_drive.enabled: true` e `google_drive.folder_id` da pasta **na sua conta** (não precisa “compartilhar” com ninguém além do seu uso normal).
+4. In `.env` or `.env.dev`: `GOOGLE_DRIVE_OAUTH_TOKEN_FILE=secrets/google_drive_token.json`
+5. In `config.yaml`: `google_drive.enabled: true` and `google_drive.folder_id` for a folder **in your account** (no extra sharing needed for OAuth).
 
-**Opção B — Service account + Shared Drive (Google Workspace)**
+**Option B — Service account + Shared Drive (Google Workspace)**
 
-1. Ative a API, crie service account e chave JSON.
-2. Crie ou use um **[Shared Drive](https://developers.google.com/workspace/drive/api/guides/about-shareddrives)** e adicione a service account como **membro** (Content manager ou similar), não basta compartilhar pasta do Meu Drive.
-3. `GOOGLE_APPLICATION_CREDENTIALS` = caminho do JSON da SA.
+1. Enable the API, create a service account and JSON key.
+2. Create or use a **[Shared Drive](https://developers.google.com/workspace/drive/api/guides/about-shareddrives)** and add the service account as a **member** (e.g. Content manager). Sharing a My Drive folder alone is not enough.
+3. `GOOGLE_APPLICATION_CREDENTIALS=secrets/your-sa.json` (or `/app/secrets/...` in Docker).
 
 If an upload fails, the error is logged and the run **continues** (Discord is still notified). Replacing the same filename: any existing file with that name in the folder is removed before upload (same-day CSV name stays a single file).
 
-For Docker, mount the token or JSON as a read-only volume and set `GOOGLE_DRIVE_OAUTH_TOKEN_FILE` or `GOOGLE_APPLICATION_CREDENTIALS` to the path **inside** the container. Do not bake secrets into the image.
+For Docker, mount the token or JSON via a **writable** volume (OAuth may refresh the token file) and set `GOOGLE_DRIVE_OAUTH_TOKEN_FILE` or `GOOGLE_APPLICATION_CREDENTIALS` to the path **inside** the container. Do not bake secrets into the image.
 
 ## Usage
 
@@ -162,7 +162,9 @@ docker compose build
 docker compose up -d
 ```
 
-Mounts `config.yaml`, `output/`, and `logs/`. Environment variables come from `.env.production` (not `.env.dev`). Mount the service account JSON and set `GOOGLE_APPLICATION_CREDENTIALS` if you use Drive in production.
+Mounts `config.yaml`, `output/`, `logs/`, and **`./secrets` → `/app/secrets`**. Environment variables come from `.env.production` (not `.env.dev`).
+
+**Secrets in Docker:** the repo includes a `secrets/` directory (with `README.txt`). On the host, copy `google_drive_token.json` (and the service account JSON if you use it) into `secrets/`. In `.env.production`, use paths **inside** the container, e.g. `GOOGLE_DRIVE_OAUTH_TOKEN_FILE=/app/secrets/google_drive_token.json`. OAuth may refresh the token on disk — do not mount `secrets` read-only. Files under `secrets/*` (except `.gitkeep` and `README.txt`) are listed in `.gitignore`.
 
 One-shot run:
 
@@ -189,7 +191,7 @@ uv run pytest tests/
 
 ## Output
 
-- CSV at `output/vagas-YYYY-MM-DD.csv` by default (UTF-8 with BOM for Excel).
+- CSV at `output/jobs-YYYY-MM-DD.csv` by default (UTF-8 with BOM for Excel).
 - Console logging: plain text for INFO/WARNING; JSON for ERROR/CRITICAL (fields such as `timestamp`, `level`, `module`, `message`, `hostname`, `extra_fields`).
 
 ## Project layout

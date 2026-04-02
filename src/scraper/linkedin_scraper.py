@@ -342,12 +342,12 @@ class LinkedInScraper:
 
                     self.results.append(
                         {
-                            "Título": title,
-                            "Empresa": company,
-                            "Local": loc,
+                            "Title": title,
+                            "Company": company,
+                            "Location": loc,
                             "Link": link,
                             "Keyword": keyword,
-                            "Filtro Experiência": ", ".join(experiences),
+                            "Experience filter": ", ".join(experiences),
                         }
                     )
                     collected += 1

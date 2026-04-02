@@ -18,6 +18,17 @@ logger = AppLogger.setup_logger(__name__)
 
 _DRIVE_SCOPE = ("https://www.googleapis.com/auth/drive",)
 
+# Repository root (job-search/) for resolving relative paths in environment variables.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _resolve_credentials_path(env_value: str) -> Path:
+    """Return an absolute path; relative values are resolved from the repository root."""
+    path = Path(env_value.strip())
+    if path.is_absolute():
+        return path
+    return (_REPO_ROOT / path).resolve()
+
 
 def _escape_drive_query_literal(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
@@ -25,13 +36,13 @@ def _escape_drive_query_literal(value: str) -> str:
 
 def _load_drive_credentials() -> Any:
     """
-    Credenciais para a API Drive: OAuth de usuário (Drive pessoal) ou service account.
+    Drive API credentials: user OAuth (personal Drive) or service account JSON.
 
-    Prioridade: GOOGLE_DRIVE_OAUTH_TOKEN_FILE; senão GOOGLE_APPLICATION_CREDENTIALS (JSON de SA).
+    Precedence: GOOGLE_DRIVE_OAUTH_TOKEN_FILE, then GOOGLE_APPLICATION_CREDENTIALS.
     """
     token_path_raw = os.getenv("GOOGLE_DRIVE_OAUTH_TOKEN_FILE", "").strip()
     if token_path_raw:
-        token_path = Path(token_path_raw)
+        token_path = _resolve_credentials_path(token_path_raw)
         if not token_path.is_file():
             raise ReportingError(f"OAuth token file not found: {token_path_raw}")
         try:
@@ -58,10 +69,10 @@ def _load_drive_credentials() -> Any:
     sa_path_raw = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
     if not sa_path_raw:
         raise ReportingError(
-            "Set GOOGLE_DRIVE_OAUTH_TOKEN_FILE (conta Google pessoal) or "
-            "GOOGLE_APPLICATION_CREDENTIALS (service account; exige Shared Drive no Workspace)."
+            "Set GOOGLE_DRIVE_OAUTH_TOKEN_FILE (personal Google account) or "
+            "GOOGLE_APPLICATION_CREDENTIALS (service account; requires Workspace Shared Drive)."
         )
-    sa_path = Path(sa_path_raw)
+    sa_path = _resolve_credentials_path(sa_path_raw)
     if not sa_path.is_file():
         raise ReportingError(f"Service account file not found: {sa_path_raw}")
 
@@ -75,7 +86,7 @@ def _load_drive_credentials() -> Any:
 
 
 class GoogleDriveUploader:
-    """Envia arquivo para uma pasta do Drive (OAuth de usuário ou service account)."""
+    """Upload files into a Drive folder using user OAuth or a service account."""
 
     def __init__(self, folder_id: str) -> None:
         fid = folder_id.strip()
@@ -120,11 +131,11 @@ class GoogleDriveUploader:
 
     def upload_file(self, local_path: str) -> str:
         """
-        Faz upload de ``local_path`` na pasta configurada.
+        Upload ``local_path`` into the configured folder.
 
-        Remove antes arquivos com o mesmo nome na pasta (um arquivo por nome).
+        Deletes any existing file with the same basename in that folder first.
 
-        Retorna o id do arquivo novo no Drive.
+        Returns the new Drive file id.
         """
         path = Path(local_path)
         if not path.is_file():
@@ -169,9 +180,10 @@ class GoogleDriveUploader:
                 or "Service Accounts do not have storage quota" in reason
             ):
                 extra["hint"] = (
-                    "Conta de serviço não tem cota no Drive pessoal. Use OAuth: "
-                    "GOOGLE_DRIVE_OAUTH_TOKEN_FILE + scripts/setup_google_drive_oauth.py, "
-                    "ou um Shared Drive (Google Workspace) com a SA como membro."
+                    "Service accounts have no storage quota on personal My Drive. "
+                    "Use OAuth: GOOGLE_DRIVE_OAUTH_TOKEN_FILE and "
+                    "scripts/setup_google_drive_oauth.py, or a Google Workspace "
+                    "Shared Drive with the service account as a member."
                 )
             logger.error(
                 "Google Drive API error",

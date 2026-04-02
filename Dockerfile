@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/playwright/python:v1.42.0-jammy
+# Pin to the same major Playwright line as requirements.txt
+FROM mcr.microsoft.com/playwright/python:v1.50.0-jammy
 
 WORKDIR /app
 COPY requirements.txt .

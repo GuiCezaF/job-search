@@ -228,3 +228,8 @@ output/
 job-search-*.json
 google_drive_token.json
 *_secret_*.*
+
+# Under secrets/, only .gitkeep and README.txt are tracked; real keys stay local
+secrets/*
+!secrets/.gitkeep
+!secrets/README.txt

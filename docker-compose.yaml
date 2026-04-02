@@ -11,3 +11,4 @@ services:
       - ./output:/app/output
       - ./logs:/app/logs
       - ./config.yaml:/app/config.yaml
+      - ./secrets:/app/secrets
