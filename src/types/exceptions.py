@@ -1,22 +1,22 @@
 class AppError(Exception):
-    """Exceção base da aplicação para mapear falhas em mensagens amigáveis na CLI."""
+    """Base exception for application-level failures."""
 
 
 class ConfigError(AppError):
-    """Configuração ausente, ilegível ou inválida após validação Pydantic."""
+    """Invalid, missing, or unreadable configuration."""
 
 
 class ScannerError(AppError):
-    """Falha genérica em etapas de coleta automatizada (scraping)."""
+    """Generic failure during automated data collection (scraping)."""
 
 
 class LoginError(ScannerError):
-    """Autenticação no LinkedIn não concluiu dentro do tempo ou URL indicou falha."""
+    """LinkedIn authentication did not complete successfully."""
 
 
 class SearchError(ScannerError):
-    """Busca ou parse da listagem de vagas falhou (uso opcional pelos scrapers)."""
+    """Job search or listing parse failed (optional use by scrapers)."""
 
 
 class ReportingError(AppError):
-    """Falha ao persistir resultados ou enviar notificações externas."""
+    """Persistence or external notification failed."""

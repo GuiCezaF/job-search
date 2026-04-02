@@ -11,9 +11,8 @@ Automation that searches **LinkedIn** jobs using keywords, locations, and experi
 ## Installation
 
 ```bash
-# Virtual environment (recommended)
 python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
+source .venv/bin/activate
 
 pip install -r requirements.txt
 playwright install chromium
@@ -36,27 +35,45 @@ uv run playwright install chromium
 
 ## Configuration
 
-### 1. Environment variables (`.env`)
+### 1. Environment files (dev vs production)
 
-Copy the template and fill in secrets:
+| Context | File loaded by the app | Template |
+|--------|-------------------------|----------|
+| **Local** (default) | `.env.dev`, or `.env` if `.env.dev` is missing | `.env.dev.example` |
+| **Docker** | `.env.production` when present in the workdir; Compose also injects vars via `env_file` | `.env.production.example` |
+
+Detection uses `/.dockerenv` or `RUNNING_IN_DOCKER=true` (set in `docker-compose.yaml`).
 
 ```bash
-cp .env.example .env
+cp .env.dev.example .env.dev
+cp .env.production.example .env.production
 ```
+
+The production file is required on the host before `docker compose up`.
+
+Override for tests or tooling:
+
+```bash
+export DOTENV_FILE=/absolute/path/to/custom.env
+```
+
+`python-dotenv` uses `override=False`: variables already set in the process environment are not replaced by the file.
 
 | Variable | Description |
 |----------|-------------|
 | `LINKEDIN_USERNAME` | LinkedIn email or username |
 | `LINKEDIN_PASSWORD` | Password |
 | `DISCORD_WEBHOOK_URL` | Full webhook URL |
-| `APP_ENV` | Optional. `production`, `prod`, or `prd` suppresses **INFO** logs (keeps **WARNING** as plain text and **ERROR+** as JSON) |
-| `HEADLESS` | Optional. `true` (default) or `false` to show the browser (useful on desktop) |
+| `APP_ENV` | Optional. `production`, `prod`, or `prd` suppresses **INFO** logs (keeps **WARNING** as plain text and **ERROR+** as JSON). Typical in `.env.production`. |
+| `HEADLESS` | Optional. `true` or `false` (templates use `false` locally and `true` in production). |
+| `RUNNING_IN_DOCKER` | Set by Compose; do not set manually on your laptop unless you mean to simulate Docker |
+| `DOTENV_FILE` | Optional. Forces a specific env file path |
 
 Environment secrets **override** matching keys in YAML when both are set.
 
 ### 2. `config.yaml`
 
-Shape expected by the Pydantic validator:
+Shape expected by the Pydantic validator (see also `config.yaml.example`):
 
 ```yaml
 linkedin:
@@ -67,12 +84,14 @@ discord:
   webhook_url: "optional-if-using-env"
 
 search:
-  schedule: "0 12 * * *"          # cron (APScheduler)
-  max_jobs_per_query: 32          # optional; default 32; range 1–200
+  schedule: "0 12 * * *"
+  max_jobs_per_query: 32
   keywords: ["Python Developer"]
   experience_levels: ["Entry level", "Mid-Senior level"]
   locations: ["Remote"]
 ```
+
+`schedule` uses cron syntax (APScheduler). `max_jobs_per_query` defaults to 32 if omitted (allowed range 1–200).
 
 Allowed `experience_levels` values (internal mapping): `Internship`, `Entry level`, `Associate`, `Mid-Senior level`, `Director`, `Executive`.
 
@@ -86,7 +105,6 @@ Runs one full cycle (login, search, CSV, Discord) and exits:
 
 ```bash
 python main.py --now
-# or
 uv run python main.py --now
 ```
 
@@ -102,12 +120,20 @@ Stop with `Ctrl+C`.
 
 ## Docker
 
+Create `.env.production` on the host (from `.env.production.example`) before starting; Compose reads it via `env_file`.
+
 ```bash
 docker compose build
 docker compose up -d
 ```
 
-Mounts `config.yaml`, `.env`, `output/`, and `logs/`. For a one-shot run on start, uncomment `command: ["--now"]` in `docker-compose.yaml`.
+Mounts `config.yaml`, `output/`, and `logs/`. Environment variables come from `.env.production` (not `.env.dev`).
+
+One-shot run:
+
+```bash
+docker compose run --rm job-search --now
+```
 
 The `Dockerfile` base image (`mcr.microsoft.com/playwright/python`) should **match the Playwright version** in `requirements.txt` (e.g. tag `v1.xx.x-jammy` or equivalent) so the runtime matches the installed browsers.
 
@@ -115,7 +141,6 @@ The `Dockerfile` base image (`mcr.microsoft.com/playwright/python`) should **mat
 
 ```bash
 pytest tests/
-# or
 uv run pytest tests/
 ```
 
@@ -135,15 +160,15 @@ uv run pytest tests/
 ## Project layout
 
 ```
-main.py                 # CLI and orchestration
-config.yaml             # Search parameters and schedule
+main.py
+config.yaml
 src/
-  scraper/              # Playwright / LinkedIn
-  notifier/             # Discord (async httpx)
-  storage/              # CSV
-  utils/                # config, logging
-  types/                # Pydantic models and exceptions
-  scheduler.py          # APScheduler (cron)
+  scraper/
+  notifier/
+  storage/
+  utils/
+  types/
+  scheduler.py
 tests/
 ```
 

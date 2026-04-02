@@ -5,26 +5,22 @@ import socket
 from datetime import datetime
 from typing import Any, Dict
 
-from dotenv import load_dotenv
+from src.utils.env_bootstrap import bootstrap_dotenv
 
-# Antes de qualquer `setup_logger`, para APP_ENV do .env valer nos imports.
-load_dotenv()
+bootstrap_dotenv()
 
 
 def _is_production() -> bool:
-    """Considera produção quando APP_ENV indica ambiente publicado (sem logs INFO)."""
+    """Return True when APP_ENV indicates a production deployment."""
     env = os.getenv("APP_ENV", "").strip().lower()
     return env in ("production", "prod", "prd")
 
 
 class JsonFormatter(logging.Formatter):
-    """
-    JSON apenas para níveis ERROR+ (SIEM); use via SelectiveFormatter.
-
-    Extras: `extra={"extra_fields": {...}}`.
-    """
+    """Serialize log records as JSON for ERROR-level and above (via SelectiveFormatter)."""
 
     def format(self, record: logging.LogRecord) -> str:
+        """Build a JSON line; merges ``record.extra_fields`` when present."""
         log_records: Dict[str, Any] = {
             "timestamp": datetime.fromtimestamp(record.created).isoformat(),
             "level": record.levelname,
@@ -44,10 +40,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class SelectiveFormatter(logging.Formatter):
-    """
-    INFO/DEBUG/WARNING: linha legível para terminal.
-    ERROR/CRITICAL: JSON estruturado.
-    """
+    """Plain text below ERROR; JSON at ERROR and CRITICAL."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -58,21 +51,18 @@ class SelectiveFormatter(logging.Formatter):
         self._json = JsonFormatter()
 
     def format(self, record: logging.LogRecord) -> str:
+        """Delegate to JSON formatter for errors; otherwise use the plain template."""
         if record.levelno >= logging.ERROR:
             return self._json.format(record)
         return self._plain.format(record)
 
 
 class AppLogger:
-    """Configura loggers com formato misto e política de nível conforme APP_ENV."""
+    """Factory for named loggers with selective formatting and production log levels."""
 
     @staticmethod
     def setup_logger(name: str, level: int | None = None) -> logging.Logger:
-        """
-        Em desenvolvimento: nível padrão INFO (mensagens em texto).
-        Em produção (APP_ENV=production|prod|prd): nível mínimo WARNING — sem logs INFO.
-        Erros sempre serializados em JSON no handler.
-        """
+        """Configure and return a logger; production mode clamps to WARNING minimum."""
         logger = logging.getLogger(name)
 
         if level is None:

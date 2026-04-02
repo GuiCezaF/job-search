@@ -20,11 +20,7 @@ logger = AppLogger.setup_logger(__name__)
 
 
 class LinkedInScraper:
-    """
-    Automação de busca de vagas no LinkedIn com Playwright (I/O assíncrono).
-
-    Mantém estado em `results` apenas durante um ciclo de `run_scrape`.
-    """
+    """Playwright-based LinkedIn job search; results accumulate per ``run_scrape`` call."""
 
     EXPERIENCE_MAP = {
         "Internship": "1",
@@ -35,7 +31,6 @@ class LinkedInScraper:
         "Executive": "6",
     }
 
-    # Limite de rodadas de scroll para carregar mais cards na lista virtualizada
     MAX_SCROLL_ROUNDS = 40
 
     def __init__(
@@ -45,15 +40,13 @@ class LinkedInScraper:
         *,
         max_jobs_per_query: int = 32,
     ) -> None:
-        """
-        max_jobs_per_query: teto de vagas válidas por keyword+local (vem do YAML / SearchConfig).
-        """
+        """``max_jobs_per_query``: cap of accepted (non-promoted, non-viewed) jobs per keyword+location."""
         if not username or not username.strip():
-            raise ValueError("username não pode ser vazio")
+            raise ValueError("username must not be empty")
         if not password:
-            raise ValueError("password não pode ser vazio")
+            raise ValueError("password must not be empty")
         if max_jobs_per_query < 1:
-            raise ValueError("max_jobs_per_query deve ser >= 1")
+            raise ValueError("max_jobs_per_query must be >= 1")
 
         self.username = username.strip()
         self.password = password
@@ -61,8 +54,9 @@ class LinkedInScraper:
         self.results: List[Dict[str, Any]] = []
 
     async def _login(self, page: Page) -> None:
+        """Fill credentials, submit login, and wait for feed or global nav."""
         logger.info(
-            "Tentando login no LinkedIn",
+            "LinkedIn login attempt",
             extra={"extra_fields": {"username": self.username}},
         )
         await page.goto("https://www.linkedin.com/login")
@@ -77,7 +71,7 @@ class LinkedInScraper:
 
             is_checked = await page.is_checked(checkbox_id)
             logger.info(
-                "Estado inicial do 'Lembre-me'",
+                "Remember-me checkbox state",
                 extra={"extra_fields": {"is_checked": is_checked}},
             )
 
@@ -87,17 +81,15 @@ class LinkedInScraper:
 
                 still_checked = await page.is_checked(checkbox_id)
                 if not still_checked:
-                    logger.info("Opção 'Mantenha-me conectado' desmarcada com sucesso.")
+                    logger.info("Remember-me cleared.")
                 else:
-                    logger.warning(
-                        "Tentativa de desmarcar falhou via clique; tentando uncheck"
-                    )
+                    logger.warning("Remember-me click failed; trying uncheck")
                     await page.uncheck(checkbox_id, force=True)
             else:
-                logger.info("Opção já estava desmarcada.")
+                logger.info("Remember-me already off.")
         except Exception as err:
             logger.warning(
-                "Não foi possível interagir com o checkbox de login",
+                "Could not toggle remember-me",
                 extra={"extra_fields": {"error": str(err)}},
             )
 
@@ -108,25 +100,21 @@ class LinkedInScraper:
                 "() => window.location.href.includes('/feed/') || document.querySelector('.global-nav') !== null",
                 timeout=15000,
             )
-            logger.info("Login realizado com sucesso.")
+            logger.info("Login successful.")
         except PlaywrightTimeoutError:
             if "login" in page.url:
                 logger.error(
-                    "Falha ao realizar login",
+                    "Login failed",
                     extra={"extra_fields": {"url": page.url}},
                 )
                 raise LoginError(
-                    "Verifique credenciais, CAPTCHA ou bloqueio da conta."
+                    "Check credentials, CAPTCHA, or account restrictions."
                 )
-            logger.info("Login parece ter tido sucesso (URL alterada), prosseguindo...")
+            logger.info("Login likely succeeded; continuing.")
 
     @staticmethod
     async def _should_skip_card(card: ElementHandle) -> bool:
-        """
-        Ignora anúncios patrocinados/promovidos e vagas já marcadas como visualizadas.
-
-        Usa texto visível + classes comuns do layout atual do LinkedIn.
-        """
+        """Return True if the card is promoted/sponsored or marked as already viewed."""
         return await card.evaluate(
             """(el) => {
               const root = el.closest('[data-occludable-job-id]') || el;
@@ -148,7 +136,7 @@ class LinkedInScraper:
 
     @staticmethod
     async def _job_id_from_card(card: ElementHandle) -> str:
-        """Chave estável para deduplicar cards ao rolar a lista virtualizada."""
+        """Stable id for deduplication while scrolling a virtualized list."""
         attr = await card.get_attribute("data-occludable-job-id")
         if attr and attr.strip():
             return attr.strip()
@@ -167,11 +155,7 @@ class LinkedInScraper:
         return ""
 
     async def _scroll_results_list(self, page: Page) -> bool:
-        """
-        Rola o painel lateral de resultados (overflow no container, não na página inteira).
-
-        Retorna False se nenhum container rolável foi encontrado.
-        """
+        """Scroll the jobs sidebar container; returns False if no scrollable panel was found."""
         return await page.evaluate(
             """() => {
               const selectors = [
@@ -197,7 +181,7 @@ class LinkedInScraper:
         )
 
     async def _scroll_last_job_into_view(self, page: Page) -> None:
-        """Força o último card conhecido a entrar na viewport da lista (lazy load)."""
+        """Scroll the last job card into view to trigger lazy loading."""
         handles = await page.query_selector_all("[data-occludable-job-id]")
         if not handles:
             return
@@ -208,6 +192,7 @@ class LinkedInScraper:
 
     @staticmethod
     def _normalize_job_url(href: str | None) -> str:
+        """Return an absolute LinkedIn job URL without query string, or ``N/A``."""
         if not href or href == "N/A":
             return "N/A"
         if href.startswith("http"):
@@ -221,6 +206,7 @@ class LinkedInScraper:
         location: str,
         experiences: List[str],
     ) -> None:
+        """Open search URL for one keyword+location and append up to ``max_jobs_per_query`` rows to ``self.results``."""
         page = await context.new_page()
 
         exp_ids = [self.EXPERIENCE_MAP[e] for e in experiences if e in self.EXPERIENCE_MAP]
@@ -231,7 +217,7 @@ class LinkedInScraper:
             url += f"&f_E={exp_param}"
 
         logger.info(
-            "Buscando vagas",
+            "Job search",
             extra={
                 "extra_fields": {
                     "keyword": keyword,
@@ -258,17 +244,17 @@ class LinkedInScraper:
             )
             if no_jobs_msg:
                 logger.warning(
-                    "Nenhuma vaga encontrada para esta combinação",
+                    "No jobs for this query",
                     extra={"extra_fields": {"keyword": keyword, "location": location}},
                 )
             else:
                 logger.error(
-                    "Timeout ao detectar lista de vagas; tentando extrair o que houver",
+                    "Timeout waiting for job list",
                     extra={"extra_fields": {"keyword": keyword, "location": location}},
                 )
         except Exception as err:
             logger.error(
-                "Erro ao aguardar lista de vagas",
+                "Error waiting for job list",
                 extra={"extra_fields": {"keyword": keyword, "error": str(err)}},
             )
 
@@ -332,7 +318,7 @@ class LinkedInScraper:
                     collected += 1
                 except Exception as err:
                     logger.error(
-                        "Erro ao extrair card",
+                        "Failed to parse job card",
                         extra={
                             "extra_fields": {
                                 "keyword": keyword,
@@ -359,7 +345,7 @@ class LinkedInScraper:
 
             if stagnant_rounds >= 5:
                 logger.info(
-                    "Scroll sem novos job ids; encerrando coleta desta busca",
+                    "No new job ids after scroll; stopping this query",
                     extra={
                         "extra_fields": {
                             "keyword": keyword,
@@ -371,12 +357,12 @@ class LinkedInScraper:
                 break
 
         logger.info(
-            "Vagas coletadas para a busca",
+            "Query collection done",
             extra={
                 "extra_fields": {
                     "keyword": keyword,
                     "location": location,
-                    "aceitas": collected,
+                    "accepted": collected,
                     "max": self.max_jobs_per_query,
                 }
             },
@@ -390,8 +376,9 @@ class LinkedInScraper:
         locations: List[str],
         experiences: List[str],
     ) -> List[Dict[str, Any]]:
+        """Log in once, then run ``_scrape_jobs_for_query`` for each keyword×location pair."""
         if not keywords:
-            logger.warning("Lista de keywords vazia; nada a buscar.")
+            logger.warning("keywords list is empty.")
             return []
 
         self.results = []

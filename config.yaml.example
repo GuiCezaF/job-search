@@ -1,37 +1,24 @@
-# Configurações do Job Search Automation
-
 search:
-  # Horário de execução (formato cron: minuto hora dia mes dia_da_semana)
-  # Exemplo: "0 9 * * *" roda todo dia às 09:00
   schedule: "0 9 * * *"
-
-  # max_jobs_per_query: número máximo de vagas válidas a coletar por combinação de palavra-chave + localidade. 
-  # Diminua se quiser limitar os resultados ou agilizar buscas (principalmente com muitas keywords).
-   max_jobs_per_query: 35
-  
-  # Palavras-chave de busca
+  max_jobs_per_query: 35
   keywords:
     - "Python Developer"
     - "Backend Engineer"
     - "Software Engineer"
-  
-  # Níveis de experiência suportados pelo LinkedIn:
-  # - "Internship"
-  # - "Entry level"
-  # - "Associate"
-  # - "Mid-Senior level"
-  # - "Director"
-  # - "Executive"
   experience_levels:
     - "Entry level"
     - "Associate"
     - "Mid-Senior level"
-  
-  # Localizações (Ex: "Brazil", "Remote", "São Paulo")
   locations:
     - "Brazil"
     - "Remote"
 
+linkedin:
+  username: "optional-if-using-env"
+  password: "optional-if-using-env"
+
+discord:
+  webhook_url: "optional-if-using-env"
+
 google_drive:
-  # Pasta onde os arquivos serão salvos (ID da pasta no final da URL do Drive)
   folder_id: "..."

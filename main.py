@@ -15,6 +15,7 @@ logger = AppLogger.setup_logger("Main")
 
 
 def _exit_with_error(message: str, *, exc_info: bool = False) -> NoReturn:
+    """Log an error and terminate the process with exit code 1."""
     logger.error(
         message,
         extra={"extra_fields": {"exit_code": 1}},
@@ -24,8 +25,8 @@ def _exit_with_error(message: str, *, exc_info: bool = False) -> NoReturn:
 
 
 async def run_job_search() -> None:
-    """Orquestra scrape, persistência e notificação (fluxo assíncrono de I/O)."""
-    logger.info("Iniciando ciclo de busca de vagas...")
+    """Run one full cycle: scrape, save CSV, notify Discord. Swallows expected errors after logging."""
+    logger.info("Starting job search cycle...")
     try:
         loader = ConfigLoader()
         app_cfg = loader.app_config
@@ -47,45 +48,47 @@ async def run_job_search() -> None:
         notifier = DiscordNotifier(app_cfg.discord.webhook_url.get_secret_value())
         await notifier.send_notification(results, file_path)
 
-        logger.info("Ciclo de busca finalizado com sucesso.")
+        logger.info("Job search cycle completed.")
     except ConfigError as err:
         logger.error(
-            "Configuração inválida ou ausente",
+            "Invalid or missing configuration",
             extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
         )
     except LoginError as err:
         logger.error(
-            "Falha de autenticação no LinkedIn",
+            "LinkedIn authentication failed",
             extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
         )
     except ReportingError as err:
         logger.error(
-            "Falha ao notificar ou exportar resultados",
+            "Export or notification failed",
             extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
         )
     except AppError as err:
         logger.error(
-            "Erro da aplicação",
+            "Application error",
             extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
         )
     except Exception as err:
         logger.error(
-            "Erro inesperado durante a execução do job",
+            "Unexpected error during job run",
             extra={"extra_fields": {"function": "run_job_search", "error": str(err)}},
             exc_info=True,
         )
 
 
 def main() -> None:
+    """CLI entry: either run once (--now) or start the cron scheduler."""
     parser = argparse.ArgumentParser(description="Job Search Automation Service")
     parser.add_argument(
         "--now",
         action="store_true",
-        help="Executa a busca imediatamente e encerra.",
+        help="Run one search cycle and exit.",
     )
     args = parser.parse_args()
 
     def sync_job_wrapper() -> None:
+        """Runs the async job pipeline inside a new event loop (for APScheduler)."""
         asyncio.run(run_job_search())
 
     if args.now:
@@ -97,9 +100,9 @@ def main() -> None:
         scheduler = JobScheduler(loader.app_config.search.schedule, sync_job_wrapper)
         scheduler.start()
     except ConfigError as err:
-        _exit_with_error(f"Falha de configuração: {err}")
+        _exit_with_error(f"Configuration error: {err}")
     except Exception as err:
-        _exit_with_error(f"Falha ao iniciar o serviço: {err}", exc_info=True)
+        _exit_with_error(f"Failed to start service: {err}", exc_info=True)
 
 
 if __name__ == "__main__":

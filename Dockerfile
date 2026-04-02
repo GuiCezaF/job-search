@@ -11,5 +11,4 @@ COPY . .
 
 RUN mkdir -p logs output
 
-# Você pode rodar "docker run job-search --now" para execuções manuais
 ENTRYPOINT ["python", "main.py"]

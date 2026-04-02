@@ -11,18 +11,18 @@ logger = AppLogger.setup_logger(__name__)
 
 
 class FileManager:
-    """
-    Persiste resultados da busca em CSV sob um diretório configurável.
-    """
+    """Persist scrape results as UTF-8 CSV files under a configurable directory."""
 
     def __init__(self, output_dir: str = "output") -> None:
+        """Create ``output_dir`` if it does not exist."""
         self.output_dir = output_dir
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir, exist_ok=True)
 
     def save_to_csv(self, data: List[Mapping[str, Any]], prefix: str = "vagas") -> str:
+        """Write ``data`` to ``{prefix}-{date}.csv``; returns path or empty string if no rows."""
         if not data:
-            logger.warning("Nenhum dado para salvar.")
+            logger.warning("No data to save.")
             return ""
 
         today = datetime.now().strftime("%Y-%m-%d")
@@ -34,13 +34,13 @@ class FileManager:
             df.to_csv(filepath, index=False, encoding="utf-8-sig")
         except OSError as err:
             logger.error(
-                "Falha ao gravar CSV",
+                "Failed to write CSV",
                 extra={"extra_fields": {"function": "save_to_csv", "path": filepath, "error": str(err)}},
             )
-            raise ReportingError(f"Não foi possível salvar o arquivo: {filepath}") from err
+            raise ReportingError(f"Could not save file: {filepath}") from err
 
         logger.info(
-            "Arquivo salvo com sucesso",
+            "File saved",
             extra={"extra_fields": {"path": filepath, "rows": len(data)}},
         )
         return filepath
